@@ -148,7 +148,7 @@ if st.session_state.mc_engine is not None:
         
         sim_type = st.radio(
             "Select Distribution Model (applied to all assets)",
-            ["Log-Normal", "Skew-Normal", "Student-t", "GH Skew-t (Azzalini Skew-tCopula)"],
+            ["Log-Normal", "Skew-Normal", "Student-t", "GH Skew-t (Azzalini Skew-t Copula)"],
             horizontal=True
         )
         
@@ -171,7 +171,7 @@ if st.session_state.mc_engine is not None:
                         results = engine.t_results
                         portfolio_sims = engine.t_portfolio_sims
                         
-                    elif sim_type == "GH Skew-t (Azzalini Copula)":
+                    elif sim_type == "GH Skew-t (Azzalini Skew-t Copula)":
                         engine.gh_azzalini_MC(sims, time_horizon, initial_investment, rebalance_interval, weights)
                         results = engine.gh_azzalini_results
                         portfolio_sims = engine.gh_azzalini_portfolio_sims
