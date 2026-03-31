@@ -428,7 +428,7 @@ class CustomMonteCarlo:
                 xlab = "Theoretical Student-t quantiles"
                 ttl = f"{ticker} vs marginal Student-t (MV fit)"
 
-            elif sim_type_label == "GH Skew-t (Azzalini Copula)":
+            elif sim_type_label == "GH Skew-t (Azzalini Skew-t Copula)":
                 par = self._gh_marginal_params[j]
                 theoretical = _sample_gh_skew_t(
                     par["mu"],
@@ -778,7 +778,7 @@ class CustomMonteCarlo:
         plt.ylabel('Portfolio Value ($)')
         plt.xlabel('Days')
         allocations = ', '.join([f"{w:.0%} {ticker}" for w, ticker in zip(weights, self.tickers)])
-        plt.title(f"Azzalini-GH MC Simulation ({allocations})\nShowing {sims} sample paths")
+        plt.title(f"GH-Azzalini Skew-t MC Simulation ({allocations})\nShowing {sims} sample paths")
         plt.grid(True, linestyle='--', alpha=0.7)
         
         fig = plt.gcf()
