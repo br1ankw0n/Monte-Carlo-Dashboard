@@ -126,7 +126,7 @@ The UI uses a persistent section selector (radio-style) so it won’t “jump ba
 
 ---
 
-## Q–Q plots (what you’re looking for)
+## Q–Q plots 
 
 Each subplot compares:
 
