@@ -16,6 +16,16 @@ from scipy.integrate import cumulative_trapezoid
 from scipy.interpolate import interp1d, PchipInterpolator
 import scipy.special as sp
 
+
+def _sample_gh_skew_t(mu, beta, delta, nu, size, rng=None):
+    """GH skew-t via normal variance–mean mixture (matches simulation in gh_azzalini_MC)."""
+    shape = nu / 2.0
+    scale = (delta**2) / 2.0
+    w = invgamma.rvs(a=shape, scale=scale, size=size, random_state=rng)
+    z = norm.rvs(size=size, random_state=rng)
+    return mu + (beta * w) + (np.sqrt(w) * z)
+
+
 class CustomMonteCarlo:
     def __init__(self, tickers):
         self.tickers = tickers
@@ -156,6 +166,7 @@ class CustomMonteCarlo:
         for i in range(d):
             a, loc, scale = skewnorm.fit(X[:, i])
             marg_params.append((a, loc, scale))
+        self._skewnorm_marg_params = marg_params
 
         U = np.zeros_like(X)
         for i, (a, loc, scale) in enumerate(marg_params):
@@ -209,13 +220,24 @@ class CustomMonteCarlo:
         plt.close(fig)
 
     def tDistMC(self, sims, time, initial, interval, weights):
-        multivariate_t_fitted =  mvt_student_t.fit(self.log_returns, method='mle')
+        multivariate_t_fitted = mvt_student_t.fit(self.log_returns, method="mle")
         params = multivariate_t_fitted.params
-        p = params.to_dict
-       
-        nu = p['dof']
-        mu = p['loc'].T
-        shape = p['shape']
+        # sklarpy: `params` may be a dict, or `.to_dict` may be a dict (not a method)
+        if isinstance(params, dict):
+            p = params
+        else:
+            td = getattr(params, "to_dict", None)
+            if callable(td):
+                p = td()
+            elif isinstance(td, dict):
+                p = td
+            else:
+                p = dict(params)
+
+        nu = p["dof"]
+        mu = np.asarray(p["loc"]).ravel()
+        shape = np.asarray(p["shape"])
+        self._mv_t_params = p
         
         mc_sims = sims
         T = time 
@@ -349,7 +371,114 @@ class CustomMonteCarlo:
         st.pyplot(fig, use_container_width=True)
         plt.close(fig)
         
-        st.write(f"**Median Sortino Ratio:** {np.round(sortinos.median(), 2)}")   
+        st.write(f"**Median Sortino Ratio:** {np.round(sortinos.median(), 2)}")
+
+    def render_qq_plots(self, sim_type_label, theoretical_sample_size=400_000):
+        """
+        Q–Q plots: historical log returns vs. the same marginal law used for the chosen MC model.
+        """
+        lr = self.log_returns
+        d = lr.shape[1]
+        ncol = 2 if d > 1 else 1
+        nrow = int(np.ceil(d / ncol))
+        fig, axes = plt.subplots(nrow, ncol, figsize=(7.5 * ncol, 6.2 * nrow))
+        if d == 1:
+            ax_list = [axes]
+        else:
+            ax_list = np.asarray(axes).ravel()
+
+        rng = np.random.default_rng(42)
+
+        for j in range(d):
+            ax = ax_list[j]
+            ticker = str(self.tickers[j])
+            real = np.asarray(lr.iloc[:, j], dtype=float)
+            real = real[~np.isnan(real)]
+            real_sorted = np.sort(real)
+            n_real = len(real_sorted)
+            pct = np.linspace(0.0, 100.0, n_real)
+
+            if sim_type_label == "Log-Normal":
+                mu = float(self.mean.iloc[j])
+                sig = float(np.sqrt(self.var.iloc[j]))
+                theoretical = rng.normal(mu, sig, size=theoretical_sample_size)
+                xlab = "Theoretical Gaussian quantiles"
+                ttl = f"{ticker} vs Gaussian (log-returns)"
+
+            elif sim_type_label == "Skew-Normal":
+                a, loc, scale = self._skewnorm_marg_params[j]
+                theoretical = skewnorm.rvs(a, loc=loc, scale=scale, size=theoretical_sample_size, random_state=rng)
+                xlab = "Theoretical skew-normal quantiles"
+                ttl = f"{ticker} vs fitted skew-normal"
+
+            elif sim_type_label == "Student-t":
+                p = self._mv_t_params
+                nu = float(p["dof"])
+                mu_v = np.asarray(p["loc"]).ravel()
+                sh = np.asarray(p["shape"])
+                mu_j = float(mu_v[j])
+                sj = float(np.sqrt(sh[j, j]))
+                theoretical = stats.t.rvs(
+                    df=nu,
+                    loc=mu_j,
+                    scale=sj,
+                    size=theoretical_sample_size,
+                    random_state=rng,
+                )
+                xlab = "Theoretical Student-t quantiles"
+                ttl = f"{ticker} vs marginal Student-t (MV fit)"
+
+            elif sim_type_label == "GH Skew-t (Azzalini Copula)":
+                par = self._gh_marginal_params[j]
+                theoretical = _sample_gh_skew_t(
+                    par["mu"],
+                    par["beta"],
+                    par["delta"],
+                    par["nu"],
+                    size=theoretical_sample_size,
+                    rng=rng,
+                )
+                xlab = "Theoretical GH skew-t quantiles"
+                ttl = f"{ticker} vs fitted GH skew-t"
+
+            else:
+                raise ValueError(f"Unknown sim type for Q-Q: {sim_type_label}")
+
+            theoretical_quantiles = np.percentile(theoretical, pct)
+            ax.scatter(
+                theoretical_quantiles,
+                real_sorted,
+                alpha=0.45,
+                edgecolors="k",
+                linewidths=0.3,
+                s=18,
+            )
+            lo_t, hi_t = np.percentile(theoretical, [0.1, 99.9])
+            lo_r, hi_r = np.percentile(real_sorted, [0.1, 99.9])
+            vmin = min(lo_t, lo_r)
+            vmax = max(hi_t, hi_r)
+            ax.plot([vmin, vmax], [vmin, vmax], color="red", linestyle="--", linewidth=2, label="y = x")
+            ax.set_title(ttl, fontsize=11, fontweight="600")
+            ax.set_xlabel(xlab, fontsize=10)
+            ax.set_ylabel("Historical log-return quantiles", fontsize=10)
+            ax.grid(True, alpha=0.3)
+            ax.legend(loc="lower right", fontsize=8)
+
+            ax.set_xlim(lo_t, hi_t)
+            ax.set_ylim(lo_r, hi_r)
+
+        for k in range(d, len(ax_list)):
+            ax_list[k].set_visible(False)
+
+        fig.suptitle(
+            "Q–Q plots: model vs historical daily log returns",
+            fontsize=13,
+            fontweight="600",
+            y=1.02,
+        )
+        fig.tight_layout(rect=[0, 0, 1, 0.97])
+        st.pyplot(fig, use_container_width=True)
+        plt.close(fig)
 
     def gh_azzalini_MC(self, sims, time, initial, interval, weights):
       
@@ -469,6 +598,7 @@ class CustomMonteCarlo:
     
         st.info("Fitting GH Skew-t marginals and mapping to uniform space...")
         uniform_data, marginal_params = fit_gh_marginals_and_transform(self.log_returns)
+        self._gh_marginal_params = marginal_params
         
         def angles_to_correlation_matrix(angles, d):
             L = np.zeros((d, d))

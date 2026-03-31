@@ -148,7 +148,7 @@ if st.session_state.mc_engine is not None:
         
         sim_type = st.radio(
             "Select Distribution Model (applied to all assets)",
-            ["Log-Normal", "Skew-Normal", "Student-t", "GH Skew-t (Azzalini Copula)"],
+            ["Log-Normal", "Skew-Normal", "Student-t", "GH Skew-t (Azzalini Skew-tCopula)"],
             horizontal=True
         )
         
@@ -178,6 +178,14 @@ if st.session_state.mc_engine is not None:
 
                     st.success("Simulation Complete!")
                     # Main path chart is already shown inside the MC method (st.pyplot + plt.close).
+
+                    st.subheader("Q–Q plots (model vs historical log returns)")
+                    st.caption(
+                        "Points near the red line mean the marginal distribution used in this run "
+                        "matches the historical daily log returns for that asset. "
+                        "Tails use a 0.1–99.9% view to limit outlier stretch."
+                    )
+                    engine.render_qq_plots(sim_type)
 
                     # --- Risk Metrics Section ---
                     st.subheader("Risk & Performance Metrics")
