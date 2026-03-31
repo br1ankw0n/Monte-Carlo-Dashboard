@@ -26,8 +26,8 @@ Interactive dashboard for simulating multi-asset portfolio paths with several re
   - **Log-Normal**: correlated Gaussian log-returns (Cholesky of covariance)
   - **Skew-Normal**: skew-normal marginals + Gaussian copula dependence
   - **Student-t**: multivariate t fit (via `sklarpy`) used to simulate heavy tails
-  - **GH Skew-t (Azzalini Copula)**: GH skew-t marginals + Azzalini skew-t copula dependence
-  Aas, K., & Haff, I. H. (2006). The generalized hyperbolic skew student’st-distribution. Journal of financial econometrics, 4(2), 275-309.
+  - **GH Skew-t (Azzalini Copula)**: GH skew-t marginals + Azzalini skew-t copula dependence \
+  Aas, K., & Haff, I. H. (2006). The generalized hyperbolic skew student’st-distribution. Journal of financial econometrics, 4(2), 275-309. \
   Yoshiba, T. (2014). Maximum likelihood estimation of skew t-copula. Bank of Japan, The Institute of Statistical Mathematics.
 
 - **Model diagnostics**
